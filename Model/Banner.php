@@ -91,6 +91,8 @@ class Banner extends \Magento\Framework\Model\AbstractModel
      */
     protected $_monolog;
 
+    protected $store_attributes = array();
+    
     /**
      * [__construct description].
      *
@@ -216,10 +218,16 @@ class Banner extends \Magento\Framework\Model\AbstractModel
             $defaultStore = $this->_bannerFactory->create()->setStoreViewId(null)->load($this->getId());
             $storeAttributes = $this->getStoreAttributes();
             $data = $this->getData();
+            // NDJ - reset strore attributes
+            $this->store_attributes = array();
+            // NDJ - end
             foreach ($storeAttributes as $attribute) {
                 if (isset($data['use_default']) && isset($data['use_default'][$attribute])) {
                     $this->setData($attribute.'_in_store', false);
                 } else {
+                    // NDJ - add to store attributes
+                    $this->store_attributes[$attribute] = true;
+                    // NDJ - end
                     $this->setData($attribute.'_in_store', true);
                     $this->setData($attribute.'_value', $this->getData($attribute));
                 }
@@ -273,6 +281,12 @@ class Banner extends \Magento\Framework\Model\AbstractModel
                 ->loadAttributeValue($this->getId(), $storeViewId, $storeAttributes, $collectionBanner);
             foreach ($attributeValue as $model) {
                 if ($this->getData($model->getData('attribute_code') . '_in_store')) {
+                    // NDJ - unset ones that are being saved
+                    $attribute_code = $model->getData('attribute_code');
+                    if(isset($this->store_attributes[$attribute_code])){
+                        unset($this->store_attributes[$attribute_code]);
+                    }
+                    // NDJ - end
                     try {
                         if ($model->getData('attribute_code') == 'image' && $this->getData('delete_image')) {
                             $model->delete();
@@ -290,6 +304,16 @@ class Banner extends \Magento\Framework\Model\AbstractModel
                     }
                 }
             }
+            // NDJ - for the remainder that don't already exist, add them
+            foreach($this->store_attributes as $attribute => $true){
+                $value = $this->_valueFactory->create();
+                $value->setBannerId($this->getId())
+                      ->setStoreId($storeViewId)
+                      ->setAttributeCode($attribute)
+                      ->setValue($this->getData($attribute . '_value'));
+                $value->save();
+            }
+            // NDJ - end
 
         }
         return parent::afterSave();
